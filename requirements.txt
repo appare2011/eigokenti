@@ -1,6 +1,1 @@
 streamlit
-openai-whisper
-streamlit-webrtc
-pydub
-av
-numpy
