@@ -1,87 +1,64 @@
 import streamlit as st
 import whisper
-import av
-import numpy as np
-import threading
-from streamlit_webrtc import webrtc_streamer, WebRtcMode
+import os
 
 # ページ設定
-st.set_page_config(page_title="リアルタイム英語監視", page_icon="🔴")
+st.set_page_config(page_title="リアルタイム英語監視", layout="centered")
 
-st.title("🔴 リアルタイム英語監視")
-st.write("「START」を押すと監視を開始します。話し続けてください。")
+st.title("🔴 英語オンリー監視中")
 
-# 警告メッセージ設定
-warning_msg = st.text_input("🇯🇵 日本語検知時のメッセージ", value="No Japanese! Speak English!")
-
-# 1. AIモデルの読み込み（キャッシュ化）
+# 1. AIモデルの準備（読み込み状況を表示）
 @st.cache_resource
 def load_model():
     return whisper.load_model("tiny")
 
-model = load_model()
+with st.sidebar:
+    st.write("AI準備状況:")
+    model = load_model()
+    st.success("AI Ready!")
 
-# 2. リアルタイム処理のクラス
-class AudioProcessor:
-    def __init__(self):
-        self.audio_buffer = np.array([], dtype=np.float32)
-        self.lock = threading.Lock()
-        self.sample_rate = 16000 # Whisperは16kHzが好き
+# 2. 警告メッセージの設定
+warning_msg = st.text_input("🇯🇵 日本語検知時のメッセージ", value="No Japanese! Speak English!")
 
-    def recv(self, frame):
-        # マイクから入ってきた音声を配列に変換
-        audio = frame.to_ndarray()
-        audio = audio.flatten().astype(np.float32) / 32768.0 # 正規化
+st.write("---")
 
-        with self.lock:
-            self.audio_buffer = np.concatenate((self.audio_buffer, audio))
+# 3. 録音と判定（ここがメイン）
+# st.audio_inputは「話し終わって1秒」で自動的にデータを送ります
+audio_data = st.audio_input("マイクをオンにして英語を話してください")
 
-        return frame
+# 結果を出すための「専用スペース」をあらかじめ確保
+display_area = st.empty()
 
-# 3. 状態を保存する場所
-if "text_output" not in st.session_state:
-    st.session_state["text_output"] = "..."
+if audio_data:
+    # 判定中は「...」と出す
+    display_area.info("AIがあなたの声を聴いています...")
+    
+    temp_file = "temp_voice.wav"
+    try:
+        with open(temp_file, "wb") as f:
+            f.write(audio_data.getbuffer())
+        
+        # Whisper AIで解析
+        result = model.transcribe(temp_file)
+        lang = result['language']
+        text = result['text'].strip()
 
-# 4. マイク入力の設置（WebRTC）
-ctx = webrtc_streamer(
-    key="realtime-checker",
-    mode=WebRtcMode.SENDONLY,
-    audio_receiver_size=1024,
-    media_stream_constraints={"video": False, "audio": True},
-    rtc_configuration={"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]},
-)
+        if text:
+            if lang == 'ja':
+                # 【ここが重要】日本語なら画面を真っ赤にして警告を出す
+                display_area.error(f"❌ 日本語を検知: 「{text}」")
+                st.markdown(f"<h1 style='text-align: center; color: red; font-size: 80px;'>{warning_msg}</h1>", unsafe_allow_html=True)
+                st.toast(warning_msg, icon="⚠️")
+            else:
+                # 英語なら緑色で出す
+                display_area.success(f"✅ English OK: {text}")
+                st.balloons() # 英語なら風船を飛ばして褒める
+        else:
+            display_area.warning("声が聞き取れませんでした。もう少しはっきり話してみて！")
 
-# 5. 裏側で常に判定し続けるループ
-output_placeholder = st.empty()
-alert_placeholder = st.empty()
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
-while ctx.state.playing:
-    if ctx.audio_receiver:
-        try:
-            audio_frames = ctx.audio_receiver.get_frames(timeout=1)
-        except:
-            continue
-
-        if len(audio_frames) > 0:
-            sound_chunk = np.array([], dtype=np.int16)
-            for frame in audio_frames:
-                sound = frame.to_ndarray().flatten()
-                sound_chunk = np.concatenate((sound_chunk, sound))
-            
-            # 音声を少し変換してAIが読めるようにする
-            audio_float = sound_chunk.astype(np.float32) / 32768.0
-            
-            # 3秒分以上のデータが溜まったら判定する（負荷軽減のため）
-            # ここでは簡易的に都度判定を試みますが、実際はバッファリングが必要です
-            # 今回はシンプルに「一定量溜まったら判定」の疑似コードにします
-            
-            # ※注意: 完全なストリーミング判定はサーバー負荷が高すぎるため、
-            # Streamlit Cloudでは「短い間隔で録音→判定」を繰り返すのが限界です。
-            
-            pass 
-
-# ⚠️ リアルタイム版の注意点
-# 無料のStreamlit Cloudサーバーでは、WebRTC（完全リアルタイム通信）が
-# スマホの回線（4G/5G）だとセキュリティでブロックされて繋がらないことがよくあります。
-# もし「START」を押してもグルグル回るだけで繋がらない場合は、
-# 先ほどの「半自動モード（録音ボタン式）」が、この環境での限界性能になります。
+st.divider()
+st.caption("※話し終わった後、1秒くらい黙ると自動で判定が始まります。")
