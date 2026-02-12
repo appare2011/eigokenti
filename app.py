@@ -1,16 +1,14 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-# ページ設定
 st.set_page_config(page_title="極限爆速・英語監視", layout="centered")
 
 st.title("⚡️ 0.1秒判定・リアルタイム監視")
-st.write("ブラウザ内で判定するため、通信待ちがありません。")
+st.write("英語はスルーし、日本語が混ざった瞬間に警告を出します。")
 
-# 警告メッセージの設定
 warning_msg = st.text_input("🇯🇵 日本語検知時のメッセージ", value="No Japanese! Speak English!")
 
-# --- JavaScript / HTML エンジン ---
+# --- JavaScript エンジン (英語・日本語 両対応版) ---
 st_js = f"""
 <div id="status" style="padding:10px; border-radius:5px; background:#f0f2f6; margin-bottom:10px; font-family:sans-serif;">
     状態: 停止中
@@ -33,18 +31,20 @@ st_js = f"""
 
     let recognition;
 
-    if (!('webkitSpeechRecognition' in window) && !('speechRecognition' in window)) {{
-        statusDiv.innerText = "エラー: お使いのブラウザは音声認識に対応していません。SafariかChromeを使ってください。";
+    if (!('webkitSpeechRecognition' in window)) {{
+        statusDiv.innerText = "エラー: SafariかChromeを使ってください。";
     }} else {{
-        const SpeechRecognition = window.webkitSpeechRecognition || window.speechRecognition;
-        recognition = new SpeechRecognition();
-        recognition.continuous = true;      // 連続して認識
-        recognition.interimResults = true;  // 喋っている途中でも結果を出す
-        recognition.lang = 'ja-JP';         // 日本語を検知するために日本語モード
+        recognition = new webkitSpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        
+        // ★ここが重要：ブラウザの言語を「自動」に近づけるため、あえて設定を工夫します
+        // iPad/iPhoneの場合、システムの言語設定に引きずられることがあるため、
+        // 日本語文字が含まれているかどうかのチェックを強化します。
+        recognition.lang = 'en-US'; 
 
         recognition.onstart = () => {{
             statusDiv.innerText = "状態: ⚡️ リアルタイム監視中...";
-            statusDiv.style.background = "#e1f5fe";
             startBtn.innerText = "🛑 監視を止める";
             startBtn.style.background = "#333";
         }};
@@ -52,21 +52,15 @@ st_js = f"""
         recognition.onresult = (event) => {{
             let interimTranscript = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {{
-                if (event.results[i].isFinal || event.results[i][0].confidence > 0.1) {{
-                    interimTranscript += event.results[i][0].transcript;
-                }}
+                interimTranscript += event.results[i][0].transcript;
             }}
 
             if (interimTranscript.length > 0) {{
-                // 日本語特有の文字（ひらがな・カタカナ）が含まれているかチェック
+                // 【判定ロジック】ひらがな・カタカナが1文字でも入ったらアウト
                 if (/[ぁ-んァ-ヶ]/.test(interimTranscript)) {{
                     showWarning(interimTranscript);
                 }}
             }}
-        }};
-
-        recognition.onerror = (event) => {{
-            statusDiv.innerText = "エラーが発生しました: " + event.error;
         }};
 
         recognition.onend = () => {{
@@ -87,21 +81,14 @@ st_js = f"""
     function showWarning(text) {{
         detectedText.innerText = "検知内容: " + text;
         warningScreen.style.display = 'flex';
-        // 判定が出た後、少しだけ停止してリセット（連続警告を防ぐ）
-        setTimeout(() => {{ 
-            if(recognition) recognition.stop();
-        }}, 500);
+        if(recognition) recognition.stop();
     }}
 
     function hideWarning() {{
         warningScreen.style.display = 'none';
-        recognition.start(); // 監視を再開
+        recognition.start();
     }}
 </script>
 """
 
-# HTMLコンポーネントを埋め込み
 components.html(st_js, height=500)
-
-st.divider()
-st.info("【使い方】\n1. 「監視スタート」を押す\n2. マイクの使用を「許可」する\n3. 日本語を喋った瞬間に画面が赤くなります！")
