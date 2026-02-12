@@ -3,7 +3,8 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="極限爆速・英語監視", layout="centered")
 
-st.title("⚡️ 完全英語縛り・超厳重モード")
+st.title("⚡️ 鉄の掟・英語オンリーモード")
+st.write("英語（アルファベット）以外が1文字でも混じると即レッドカードです。")
 
 warning_msg = st.text_input("🇯🇵 日本語検知時のメッセージ", value="No Japanese! Speak English!")
 
@@ -36,9 +37,9 @@ st_js = f"""
         recognition.continuous = true;
         recognition.interimResults = true;
         
-        // 言語設定をあえて「指定なし」に近い状態にするか、
-        // もしくは「日本語」にして、英語を喋った時の「違和感」で判定します。
-        recognition.lang = 'ja-JP'; 
+        // 言語はあえて「英語」に固定します。
+        // これでブラウザに「英語しか喋らないぞ」と圧力をかけます。
+        recognition.lang = 'en-US'; 
 
         recognition.onresult = (event) => {{
             let transcript = '';
@@ -47,21 +48,19 @@ st_js = f"""
             }}
 
             if (transcript.length > 0) {{
-                // 【超厳重判定】
-                // 1. ひらがな・カタカナ・漢字が含まれているか
-                const hasJapanese = /[ぁ-んァ-ヶ一-龠]/.test(transcript);
-                
-                // 2. 「こんにちは」を「Contains」などに変換された時の対策：
-                // 日本語モードで英語を話すと、不自然なカタカナが混じることが多いです
-                if (hasJapanese) {{
+                // 【鉄の掟ロジック】
+                // アルファベット、数字、スペース、一般的な記号「以外」が
+                // 1文字でも含まれていたら、それは日本語（カタカナ含む）とみなす。
+                // [^ -~] は「半角英数記号以外」という意味です。
+                if (/[^ -~]/.test(transcript)) {{
                     showWarning(transcript);
                 }}
             }}
         }};
 
         recognition.onstart = () => {{
-            statusDiv.innerText = "状態: ⚡️ 厳重監視中...";
-            startBtn.innerText = "🛑 停止";
+            statusDiv.innerText = "状態: 🔥 鉄の掟モードで作動中...";
+            startBtn.innerText = "🛑 監視停止";
             startBtn.style.background = "#333";
         }};
 
@@ -81,7 +80,7 @@ st_js = f"""
     }};
 
     function showWarning(text) {{
-        detectedText.innerText = "検知内容: " + text;
+        detectedText.innerText = "検知された非英語: " + text;
         warningScreen.style.display = 'flex';
         if(recognition) recognition.stop();
     }}
