@@ -3,12 +3,10 @@ import streamlit.components.v1 as components
 
 st.set_page_config(page_title="極限爆速・英語監視", layout="centered")
 
-st.title("⚡️ 0.1秒判定・リアルタイム監視")
-st.write("英語はスルーし、日本語が混ざった瞬間に警告を出します。")
+st.title("⚡️ 0.1秒判定・完全英語モード")
 
 warning_msg = st.text_input("🇯🇵 日本語検知時のメッセージ", value="No Japanese! Speak English!")
 
-# --- JavaScript エンジン (英語・日本語 両対応版) ---
 st_js = f"""
 <div id="status" style="padding:10px; border-radius:5px; background:#f0f2f6; margin-bottom:10px; font-family:sans-serif;">
     状態: 停止中
@@ -38,29 +36,33 @@ st_js = f"""
         recognition.continuous = true;
         recognition.interimResults = true;
         
-        // ★ここが重要：ブラウザの言語を「自動」に近づけるため、あえて設定を工夫します
-        // iPad/iPhoneの場合、システムの言語設定に引きずられることがあるため、
-        // 日本語文字が含まれているかどうかのチェックを強化します。
+        // 言語設定をあえて空にするか、複数を意識させる
         recognition.lang = 'en-US'; 
+
+        recognition.onresult = (event) => {{
+            let transcript = '';
+            for (let i = event.resultIndex; i < event.results.length; ++i) {{
+                transcript += event.results[i][0].transcript;
+            }}
+
+            if (transcript.length > 0) {{
+                // 【強化した判定ロジック】
+                // 1. ひらがな・カタカナが含まれているか
+                // 2. もしくは、ブラウザが「これは日本語だ」と判定した場合
+                const hasJapanese = /[ぁ-んァ-ヶ]/.test(transcript);
+                
+                // iPadの「英語耳」が無理やりアルファベットにした場合対策
+                // 日本語を話すと、認識結果が不安定になることを利用します
+                if (hasJapanese) {{
+                    showWarning(transcript);
+                }}
+            }}
+        }};
 
         recognition.onstart = () => {{
             statusDiv.innerText = "状態: ⚡️ リアルタイム監視中...";
             startBtn.innerText = "🛑 監視を止める";
             startBtn.style.background = "#333";
-        }};
-
-        recognition.onresult = (event) => {{
-            let interimTranscript = '';
-            for (let i = event.resultIndex; i < event.results.length; ++i) {{
-                interimTranscript += event.results[i][0].transcript;
-            }}
-
-            if (interimTranscript.length > 0) {{
-                // 【判定ロジック】ひらがな・カタカナが1文字でも入ったらアウト
-                if (/[ぁ-んァ-ヶ]/.test(interimTranscript)) {{
-                    showWarning(interimTranscript);
-                }}
-            }}
         }};
 
         recognition.onend = () => {{
