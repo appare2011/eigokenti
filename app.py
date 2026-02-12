@@ -37,4 +37,5 @@ if audio_file:
         st.success(f"✅ English OK: {text}")
 
 st.divider()
+
 st.header(f"📊 日本語を話した回数: {st.session_state.count} 回")
