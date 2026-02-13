@@ -1,30 +1,30 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="24時間英語監視・ログ付", layout="centered")
+st.set_page_config(page_title="Ironclad English Coach", layout="centered")
 
-st.title("⚡️ 英語ログ ＆ 鉄の掟監視")
-st.write("話した英語は下に記録されます。日本語が混じると即警告が出ます。")
+st.title("🚀 120万点：鉄壁の英語監視")
+st.markdown("綴り、音の並び、単語の長さから**「日本語の気配」**を完全に遮断します。")
 
-warning_msg = st.text_input("🇯🇵 日本語検知時のメッセージ", value="No Japanese! Speak English!")
+warning_msg = st.text_input("🇯🇵 警告メッセージ", value="SYSTEM ERROR: NON-ENGLISH DETECTED!")
 
 st_js = f"""
-<div id="status" style="padding:10px; border-radius:5px; background:#f0f2f6; margin-bottom:10px; font-family:sans-serif; font-size:14px;">
-    状態: 停止中
+<div id="status" style="padding:10px; border-radius:5px; background:#f0f2f6; margin-bottom:10px; font-family:sans-serif; font-size:14px; font-weight:bold;">
+    STATUS: ONLINE
 </div>
 
-<div id="warning-screen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:red; color:white; z-index:9999; justify-content:center; align-items:center; flex-direction:column; text-align:center; font-family:sans-serif;">
-    <h1 style="font-size:60px; margin:0;">🚨 {warning_msg} 🚨</h1>
-    <p id="detected-text" style="font-size:24px; margin:20px; background:rgba(0,0,0,0.2); padding:10px;"></p>
-    <button onclick="hideWarning()" style="padding:15px 30px; font-size:20px; border:none; border-radius:5px; cursor:pointer; background:white; color:red; font-weight:bold;">再開する</button>
+<div id="warning-screen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#ff0000; z-index:9999; justify-content:center; align-items:center; flex-direction:column; text-align:center;">
+    <h1 style="font-size:50px; margin:0; border:5px solid #ff0000; padding:20px;">{warning_msg}</h1>
+    <p id="detected-text" style="font-size:24px; margin:20px; font-family:monospace; color:#fff;"></p>
+    <button onclick="hideWarning()" style="padding:20px 40px; font-size:24px; border:none; border-radius:10px; cursor:pointer; background:#ff0000; color:#fff; font-weight:bold;">RESTART SYSTEM</button>
 </div>
 
-<button id="start-btn" style="padding:20px; width:100%; background:#ff4b4b; color:white; border:none; border-radius:10px; font-size:20px; cursor:pointer; font-weight:bold; margin-bottom:20px;">
-    🎤 監視＆ログ開始
+<button id="start-btn" style="padding:25px; width:100%; background:#222; color:#00ff00; border:2px solid #00ff00; border-radius:15px; font-size:22px; cursor:pointer; font-family:monospace; font-weight:bold; box-shadow: 0 0 10px #00ff00;">
+    INITIATE ENGLISH-ONLY PROTOCOL
 </button>
 
-<div style="font-family:sans-serif; font-weight:bold; margin-bottom:5px;">📋 English Log:</div>
-<div id="log-container" style="width:100%; height:250px; border:2px solid #ddd; border-radius:10px; padding:10px; overflow-y:scroll; background:#fafafa; font-family:monospace; font-size:18px; line-height:1.5;">
+<div style="margin-top:20px; font-weight:bold; color:#00ff00; font-family:monospace;">> LIVE_FEED:</div>
+<div id="log-container" style="width:100%; height:300px; border:1px solid #00ff00; border-radius:10px; padding:15px; overflow-y:scroll; background:#000; font-family:'Courier New', monospace; font-size:20px; line-height:1.4; color:#00ff00;">
 </div>
 
 <script>
@@ -35,73 +35,85 @@ st_js = f"""
     const logContainer = document.getElementById('log-container');
 
     let recognition;
-    let finalTranscript = '';
 
-    if (!('webkitSpeechRecognition' in window)) {{
-        statusDiv.innerText = "エラー: SafariかChromeを使ってください。";
-    }} else {{
-        recognition = new webkitSpeechRecognition();
+    function initRecognition() {{
+        const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+        recognition = new SpeechRecognition();
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = 'en-US'; 
+        recognition.lang = 'en-US';
 
         recognition.onresult = (event) => {{
-            let interimTranscript = '';
+            let interimText = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {{
                 let text = event.results[i][0].transcript;
                 
-                // 【鉄の掟チェック】
-                // 半角英数記号以外（日本語・カタカナ）が含まれているか
-                if (/[^ -~]/.test(text)) {{
-                    showWarning(text);
-                    return; // 警告時は処理中断
+                // 【120万点の監視ロジック】
+                // 1. 非英字（かな・漢字）
+                const hasJp = /[^ -~]/.test(text);
+                
+                // 2. ローマ字特有の綴り（連続するn, m, rや特定の母音パターン）
+                const hasRomajiPattern = /nni|mme|tti|ssi|rru|hha|nno|ssu|kku|[aiueo]{{3,}}/i.test(text);
+                
+                // 3. 異常な単語の長さ（スペースなしで12文字以上は、ローマ字変換の疑い）
+                const words = text.split(' ');
+                const hasLongWord = words.some(w => w.length > 12);
+
+                if (hasJp || hasRomajiPattern || hasLongWord) {{
+                    triggerWarning(text);
+                    return;
                 }}
 
                 if (event.results[i].isFinal) {{
-                    finalTranscript += text + ' ';
+                    logContainer.innerHTML += '<div>> ' + text.toUpperCase() + '</div>';
                 }} else {{
-                    interimTranscript = text;
+                    interimText = text;
                 }}
             }}
-            
-            // ログの更新
-            logContainer.innerHTML = '<span style="color:#333;">' + finalTranscript + '</span>' + 
-                                   '<span style="color:#aaa;">' + interimTranscript + '</span>';
             logContainer.scrollTop = logContainer.scrollHeight;
         }};
 
         recognition.onstart = () => {{
-            statusDiv.innerText = "状態: 🔥 監視＆記録中...";
-            startBtn.innerText = "🛑 停止";
-            startBtn.style.background = "#333";
+            statusDiv.innerText = "STATUS: ACTIVE_FILTERING";
+            statusDiv.style.color = "#00ff00";
+            startBtn.innerText = "TERMINATE SESSION";
+            startBtn.style.boxShadow = "0 0 20px #ff0000";
+            startBtn.style.color = "#ff0000";
+            startBtn.style.borderColor = "#ff0000";
         }};
 
         recognition.onend = () => {{
-            statusDiv.innerText = "状態: 停止中";
-            startBtn.innerText = "🎤 監視＆ログ開始";
-            startBtn.style.background = "#ff4b4b";
+            if (warningScreen.style.display !== 'flex') {{
+                statusDiv.innerText = "STATUS: IDLE";
+                statusDiv.style.color = "#222";
+                startBtn.innerText = "INITIATE ENGLISH-ONLY PROTOCOL";
+                startBtn.style.boxShadow = "0 0 10px #00ff00";
+                startBtn.style.color = "#00ff00";
+                startBtn.style.borderColor = "#00ff00";
+            }}
         }};
     }}
 
-    startBtn.onclick = () => {{
-        if (statusDiv.innerText.includes("停止中")) {{
-            recognition.start();
-        }} else {{
-            recognition.stop();
-        }}
-    }};
-
-    function showWarning(text) {{
-        detectedText.innerText = "禁止文字を検知: " + text;
+    function triggerWarning(text) {{
+        detectedText.innerText = "SECURITY BREACH: " + text;
         warningScreen.style.display = 'flex';
-        if(recognition) recognition.stop();
+        recognition.stop();
     }}
 
     function hideWarning() {{
         warningScreen.style.display = 'none';
         recognition.start();
     }}
+
+    startBtn.onclick = () => {{
+        if (!recognition) initRecognition();
+        if (statusDiv.innerText.includes("IDLE") || statusDiv.innerText.includes("ONLINE")) {{
+            recognition.start();
+        }} else {{
+            recognition.stop();
+        }}
+    }};
 </script>
 """
 
-components.html(st_js, height=600)
+components.html(st_js, height=750)
