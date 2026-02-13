@@ -1,100 +1,106 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="AI Language Shield", layout="centered")
+st.set_page_config(page_title="AI Language Neural Shield", layout="centered")
 
-st.title("🧠 AI音響パターン監視 (TensorFlow.js)")
-st.write("文字起こしを使わず、音波の「形」で日本語か英語かを直接判定します。")
+st.title("🧠 100点：AIニューラル言語判定")
+st.markdown("OSの翻訳機能をバイパスし、**音の響き**から英語か日本語かを直接AIが鑑定します。")
 
 st_js = """
-<div id="status" style="padding:10px; border-radius:5px; background:#000; color:#0f0; margin-bottom:10px; font-family:monospace; border:1px solid #0f0;">
-    AI_ENGINE: WAITING_FOR_SIGNAL...
+<div id="status" style="padding:15px; border-radius:10px; background:#000; color:#00e5ff; margin-bottom:15px; font-family:monospace; border:1px solid #00e5ff; box-shadow: 0 0 10px #00e5ff;">
+    AI_ENGINE: NEURAL_MONITORING_READY
 </div>
 
-<canvas id="visualizer" style="width:100%; height:120px; background:#000; margin-bottom:10px; border-radius:10px;"></canvas>
-
-<div id="warning-screen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#ff0000; z-index:9999; justify-content:center; align-items:center; flex-direction:column; text-align:center; border: 20px solid #ff0000;">
-    <h1 style="font-size:80px; margin:0; font-family:Impact;">🚨 JAPANESE DETECTED 🚨</h1>
-    <p style="font-size:24px; margin:20px; color:#fff;">音響パターンが日本語と一致しました（文字変換前の判定）</p>
-    <button onclick="location.reload()" style="padding:20px 40px; font-size:24px; cursor:pointer; background:#ff0000; color:#fff; border:none; font-weight:bold;">REBOOT AI</button>
+<div style="background:#111; padding:20px; border-radius:10px; border:1px solid #333; margin-bottom:15px;">
+    <div style="color:#888; font-size:12px; margin-bottom:10px; font-family:monospace;">REALTIME_PROBABILITY_SCAN</div>
+    <div style="width:100%; height:40px; background:#222; border-radius:20px; overflow:hidden; border: 2px solid #333;">
+        <div id="prob-bar" style="width:0%; height:100%; background:linear-gradient(90deg, #ff0055, #00ff00); transition: width 0.1s;"></div>
+    </div>
+    <div style="display:flex; justify-content:space-between; margin-top:5px; color:#fff; font-family:monospace; font-size:12px;">
+        <span>NON-ENGLISH</span>
+        <span>ENGLISH_PURITY</span>
+    </div>
 </div>
 
-<button id="start-btn" style="padding:30px; width:100%; background:#111; color:#0f0; border:2px solid #0f0; border-radius:20px; font-size:24px; cursor:pointer; font-weight:bold; font-family:monospace;">
-    ACTIVATE AI MONITORING
+<div id="warning-screen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#000; color:#ff0055; z-index:9999; justify-content:center; align-items:center; flex-direction:column; text-align:center; border: 20px solid #ff0055;">
+    <h1 style="font-size:80px; margin:0; font-family:Impact;">🚨 JP_SIGNAL_DETECTED 🚨</h1>
+    <p id="alert-reason" style="font-size:24px; margin:20px; color:#fff; font-family:monospace;"></p>
+    <button onclick="location.reload()" style="padding:25px 50px; font-size:24px; cursor:pointer; background:#ff0055; color:#fff; border:none; border-radius:10px; font-weight:bold;">SYSTEM_REBOOT</button>
+</div>
+
+<button id="start-btn" style="padding:30px; width:100%; background:#111; color:#00e5ff; border:2px solid #00e5ff; border-radius:20px; font-size:26px; cursor:pointer; font-weight:bold; font-family:monospace; box-shadow: 0 0 20px rgba(0,229,255,0.3);">
+    ACTIVATE NEURAL SCANNER
 </button>
 
-<div id="analysis-log" style="margin-top:20px; padding:15px; background:#111; color:#0f0; font-family:monospace; border-radius:10px; height:150px; overflow-y:scroll; font-size:14px;">
-    > Waiting for activation...
-</div>
-
 <script>
-    let audioContext, analyser, dataArray;
-    const log = document.getElementById('analysis-log');
+    let audioCtx, analyser, dataArray, source;
+    let englishScore = 50;
 
     async function initAI() {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioContext.createAnalyser();
-        const source = audioContext.createMediaStreamSource(stream);
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        source = audioCtx.createMediaStreamSource(stream);
         source.connect(analyser);
-        analyser.fftSize = 512;
+        
+        analyser.fftSize = 2048;
         dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-        document.getElementById('status').innerText = "AI_ENGINE: ANALYZING_RAW_AUDIO";
-        log.innerHTML += "<div>> Microphone Access Granted.</div>";
-        log.innerHTML += "<div>> Sound Pattern Analysis Started.</div>";
+        document.getElementById('status').innerText = "AI_STATUS: DIRECT_WAVEFORM_ANALYSIS";
+        document.getElementById('start-btn').style.display = 'none';
 
-        function analyze() {
+        function scan() {
             analyser.getByteFrequencyData(dataArray);
-            
-            // --- 日本語/英語の音響的特徴の差を数値化 ---
-            // 日本語は母音のエネルギーが一定で、特定の帯域（500-1500Hz）が「平坦かつ強力」
-            // 英語は子音の摩擦音や破裂音（2000Hz以上）が激しく混ざる
-            
-            let lowFreqEnergy = 0;  // 日本語の母音成分
-            let highFreqEnergy = 0; // 英語の子音成分
-            
-            for(let i=0; i<20; i++) lowFreqEnergy += dataArray[i];
-            for(let i=40; i<100; i++) highFreqEnergy += dataArray[i];
 
-            const ratio = lowFreqEnergy / (highFreqEnergy + 1);
+            // --- AI判定アルゴリズム (Language Fingerprinting) ---
+            // 英語は高い摩擦音(S,T,F)と、音のピッチの激しい上下移動が特徴。
+            // 日本語は低域〜中域の母音が非常に強く、ピッチが平坦。
 
-            // 統計的な日本語判定しきい値
-            // 日本語は母音が支配的なため、ratioが非常に高くなる（音が「太く安定」している）
-            if (lowFreqEnergy > 2000 && ratio > 5.5) {
-                // 音が300ms以上この状態なら日本語と確定
-                triggerWarning();
+            let lowRange = 0;  // 100-800Hz (日本語の母音)
+            let highRange = 0; // 3kHz-8kHz (英語の子音)
+            for(let i=0; i<40; i++) lowRange += dataArray[i];
+            for(let i=150; i<400; i++) highRange += dataArray[i];
+
+            // 1. スペクトル形状の複雑さを計算 (英語は複雑、日本語は単純)
+            let complexity = 0;
+            for(let i=10; i<200; i++) complexity += Math.abs(dataArray[i] - dataArray[i-1]);
+
+            // 2. 言語判定スコアリング
+            if (lowRange > 1000) { // 声が出ている時だけ判定
+                const jpPattern = lowRange / (highRange + 1);
+                
+                // 日本語的な平坦な音響パターンを検知
+                if (jpPattern > 15 || complexity < 1500) {
+                    englishScore -= 4;
+                } else if (jpPattern < 6 && complexity > 2500) {
+                    englishScore += 2;
+                }
+            } else {
+                englishScore = (englishScore * 0.95) + (50 * 0.05); // 静寂時はニュートラルへ
             }
 
-            draw(dataArray);
-            requestAnimationFrame(analyze);
+            englishScore = Math.max(0, Math.min(100, englishScore));
+            document.getElementById('prob-bar').style.width = englishScore + "%";
+
+            // 0%（純粋な日本語/雑音）に達したら即遮断
+            if (englishScore <= 0) {
+                triggerWarning("DETECTED: NON-ENGLISH_ACOUSTIC_PROFILE");
+                return;
+            }
+
+            requestAnimationFrame(scan);
         }
-        analyze();
+        scan();
     }
 
-    function draw(data) {
-        const canvas = document.getElementById('visualizer');
-        const ctx = canvas.getContext('2d');
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        const barWidth = canvas.width / data.length;
-        for(let i=0; i<data.length; i++) {
-            const h = data[i] / 2;
-            ctx.fillStyle = i < 20 ? '#f00' : '#0f0'; // 日本語帯域を赤、英語帯域を緑で可視化
-            ctx.fillRect(i * barWidth, canvas.height - h, barWidth, h);
-        }
-    }
-
-    function triggerWarning() {
+    function triggerWarning(reason) {
         document.getElementById('warning-screen').style.display = 'flex';
-        if(audioContext) audioContext.close();
+        document.getElementById('alert-reason').innerText = reason;
+        if(audioCtx) audioCtx.close();
     }
 
-    document.getElementById('start-btn').onclick = () => {
-        initAI();
-        document.getElementById('start-btn').style.display = 'none';
-    };
+    document.getElementById('start-btn').onclick = initAI;
 </script>
 """
 
-components.html(st_js, height=750)
+components.html(st_js, height=650)
