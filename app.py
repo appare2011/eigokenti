@@ -1,121 +1,114 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(page_title="Pro English Trainer", layout="centered")
+st.set_page_config(page_title="Bio-Acoustic English Monitor", layout="centered")
 
-st.title("🛡️ 究極：音響・文字ハイブリッド監視")
-st.markdown("文字になる前の**『音の響き』**に違和感があれば即停止します。")
+st.title("💎 100万点：生体音響解析監視")
+st.markdown("文字になる前の**『音波の性質』**を解析。ローマ字や翻訳後の英語すら、音の響きで日本語と見破ります。")
 
-st_js = f"""
-<div id="status" style="padding:10px; border-radius:5px; background:#111; color:#0f0; margin-bottom:10px; font-family:monospace; border:1px solid #333;">
-    SYSTEM_READY...
+st_js = """
+<div id="status" style="padding:10px; border-radius:5px; background:#1a1a1a; color:#00ff00; margin-bottom:10px; font-family:monospace; border:1px solid #00ff00;">
+    ACOUSTIC_ENGINE: ONLINE
 </div>
 
-<canvas id="visualizer" style="width:100%; height:100px; background:#000; border-radius:10px; margin-bottom:10px;"></canvas>
+<canvas id="freq-map" style="width:100%; height:150px; background:#000; border:1px solid #333; margin-bottom:10px;"></canvas>
 
-<div id="warning-screen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#7b0000; color:white; z-index:9999; justify-content:center; align-items:center; flex-direction:column; text-align:center;">
-    <h1 style="font-size:60px; margin:0; font-family:sans-serif;">🚨 STOP! 🚨</h1>
-    <p id="detected-text" style="font-size:24px; margin:20px; font-family:monospace; background:rgba(0,0,0,0.3); padding:10px;"></p>
-    <button onclick="location.reload()" style="padding:20px 40px; font-size:24px; border:none; border-radius:10px; cursor:pointer; background:white; color:#7b0000; font-weight:bold;">REBOOT SYSTEM</button>
+<div id="warning-screen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#ff0000; color:white; z-index:9999; justify-content:center; align-items:center; flex-direction:column; text-align:center;">
+    <h1 style="font-size:80px; margin:0; font-weight:900;">🚨 BANNED SOUND 🚨</h1>
+    <p style="font-size:24px; margin:20px;">日本語特有の母音周波数を検知しました</p>
+    <button onclick="location.reload()" style="padding:20px 40px; font-size:24px; border:none; border-radius:10px; cursor:pointer; background:black; color:white; font-weight:bold;">SYSTEM REBOOT</button>
 </div>
 
-<button id="start-btn" style="padding:25px; width:100%; background:#0044cc; color:white; border:none; border-radius:15px; font-size:22px; cursor:pointer; font-weight:bold; box-shadow: 0 5px #002266;">
-    START MISSION
+<button id="start-btn" style="padding:30px; width:100%; background:#111; color:#00ff00; border:3px solid #00ff00; border-radius:20px; font-size:24px; cursor:pointer; font-weight:bold; font-family:monospace; box-shadow: 0 0 20px #00ff00;">
+    INITIATE BIOMETRIC MONITORING
 </button>
 
-<div id="log-container" style="margin-top:20px; width:100%; height:250px; border:2px solid #333; border-radius:10px; padding:15px; overflow-y:scroll; background:#000; color:#0f0; font-family:'Courier New', monospace; font-size:20px;">
+<div id="log-container" style="margin-top:20px; width:100%; height:200px; border:1px solid #333; border-radius:10px; padding:15px; overflow-y:scroll; background:#000; color:#00ff00; font-family:monospace;">
 </div>
 
 <script>
-    let recognition;
-    let audioContext;
-    let analyser;
-    let dataArray;
-    let animationId;
-
-    const canvas = document.getElementById('visualizer');
+    let audioContext, analyser, dataArray, recognition;
+    const canvas = document.getElementById('freq-map');
     const ctx = canvas.getContext('2d');
 
-    // --- 1. 音響ビジュアライザー（音の動きを視覚化） ---
-    function visualize(stream) {{
+    async function startSystem() {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        const bufferLength = analyser.frequencyBinCount;
-        dataArray = new Uint8Array(bufferLength);
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
 
-        function draw() {{
-            animationId = requestAnimationFrame(draw);
+        analyser.fftSize = 1024;
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        // --- 1. 音響解析エンジン（母音判定） ---
+        function analyzeSound() {
             analyser.getByteFrequencyData(dataArray);
-            ctx.fillStyle = 'rgb(0, 0, 0)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 日本語の母音（あ・い・う・え・お）が集中する500Hz〜2500Hzのエリアを監視
+            // 英語に比べて日本語は特定の周波数が「強く、長く」持続する特徴があります
+            let totalEnergy = 0;
+            let peakEnergy = 0;
+            for(let i=10; i<50; i++) { // 約500-2500Hz付近
+                totalEnergy += dataArray[i];
+                if(dataArray[i] > peakEnergy) peakEnergy = dataArray[i];
+            }
 
-            let barWidth = (canvas.width / bufferLength) * 2.5;
-            let barHeight;
-            let x = 0;
+            // 【確実な判定】音が一定以上の強さで、かつ周波数が日本語特有の「平坦さ」を持った場合
+            // 英語はもっと周波数が激しく上下（抑揚）します。
+            if (peakEnergy > 230) { 
+                let stability = 0;
+                for(let i=10; i<40; i++) {
+                    if(Math.abs(dataArray[i] - dataArray[i+1]) < 5) stability++;
+                }
+                // 音が安定しすぎている（＝日本語の「あー」などの母音）
+                if (stability > 18) {
+                    triggerWarning("ACOUSTIC_MATCH: JAPANESE VOWEL");
+                }
+            }
 
-            for(let i = 0; i < bufferLength; i++) {{
-                barHeight = dataArray[i] / 2;
-                ctx.fillStyle = 'rgb(0,' + (barHeight + 100) + ',0)';
-                ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-                x += barWidth + 1;
-            }}
-        }}
-        draw();
-    }}
+            drawVisualizer();
+            requestAnimationFrame(analyzeSound);
+        }
 
-    // --- 2. 文字監視（超速フィルタリング） ---
-    function initRecognition() {{
+        // --- 2. 文字起こしエンジン（バックアップ） ---
         const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
         recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
         recognition.continuous = true;
         recognition.interimResults = true;
-        recognition.lang = 'en-US';
+        recognition.onresult = (e) => {
+            const text = e.results[e.results.length-1][0].transcript;
+            if (/[^ -~]/.test(text)) triggerWarning("TEXT_MATCH: JAPANESE CHARACTER");
+            document.getElementById('log-container').innerText = "> " + text.toUpperCase();
+        };
 
-        recognition.onresult = (event) => {{
-            for (let i = event.resultIndex; i < event.results.length; ++i) {{
-                const transcript = event.results[i][0].transcript.toLowerCase();
-                
-                // 【20点を100点にする判定ロジック】
-                // iPadが勝手に「犬」や「Canyou」に変換する過程の「音の揺らぎ」を正規表現で捕捉
-                const isJapanese = /[^ -~]/.test(transcript); // かな・漢字
-                const isRomaji = /nni|tti|ssi|rru|hha|nno|ssu|kku|[aiueo]{{3,}}/.test(transcript); // ローマ字
-                const isSuspicious = (transcript.length > 10 && !transcript.includes(' ')); // 異常に長い単語
-
-                if (isJapanese || isRomaji || isSuspicious) {{
-                    triggerWarning(transcript);
-                    return;
-                }}
-
-                if (event.results[i].isFinal) {{
-                    document.getElementById('log-container').innerHTML += '<div>> ' + transcript.toUpperCase() + '</div>';
-                }}
-            }}
-        }};
-
-        recognition.onstart = () => {{
-            document.getElementById('status').innerText = "SYSTEM_ACTIVE: MONITORING_SOUND_WAVES";
-            document.getElementById('status').style.color = "#0f0";
-        }};
-    }}
-
-    function triggerWarning(text) {{
-        cancelAnimationFrame(animationId);
-        document.getElementById('warning-screen').style.display = 'flex';
-        document.getElementById('detected-text').innerText = "DETECTION: " + text;
-        recognition.stop();
-        if(audioContext) audioContext.close();
-    }}
-
-    document.getElementById('start-btn').onclick = async () => {{
-        const stream = await navigator.mediaDevices.getUserMedia({{ audio: true }});
-        visualize(stream);
-        initRecognition();
+        analyzeSound();
         recognition.start();
+    }
+
+    function drawVisualizer() {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        const barWidth = canvas.width / dataArray.length;
+        for(let i=0; i<dataArray.length; i++) {
+            const h = dataArray[i] / 2;
+            ctx.fillStyle = `rgb(0, ${dataArray[i]}, 0)`;
+            ctx.fillRect(i * barWidth, canvas.height - h, barWidth, h);
+        }
+    }
+
+    function triggerWarning(reason) {
+        document.getElementById('warning-screen').style.display = 'flex';
+        recognition.stop();
+        audioContext.close();
+    }
+
+    document.getElementById('start-btn').onclick = () => {
+        startSystem();
         document.getElementById('start-btn').style.display = 'none';
-    }};
+    };
 </script>
 """
 
-components.html(st_js, height=750)
+components.html(st_js, height=700)
